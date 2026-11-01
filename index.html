@@ -1,0 +1,605 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Agenda Familiar</title>
+<meta name="description" content="Agenda compartida de la familia, por mes, día y hora.">
+<meta name="theme-color" content="#F4F5F7" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#111419" media="(prefers-color-scheme: dark)">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Agenda">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Atkinson+Hyperlegible:wght@400;700&display=swap">
+<style>
+/* Layout: one column agenda — month as a highlighter stripe, day cell on the left, rows of time | activity | who on the right */
+:root{
+  --bg:#F4F5F7; --surface:#FFFFFF; --ink:#1B2130; --muted:#687085; --line:#E2E5EB;
+  --mark:#FFD54A; --mark-ink:#352900; --done:#A3A9B6; --danger:#C23B2E; --scrim:rgba(20,24,33,.38);
+  --display:"Bricolage Grotesque", ui-sans-serif, system-ui, sans-serif;
+  --body:"Atkinson Hyperlegible", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){:root{
+  --bg:#111419; --surface:#191D25; --ink:#E8EBF1; --muted:#8C94A7; --line:#2A303B;
+  --mark:#E3B321; --mark-ink:#211800; --done:#5D6474; --danger:#F07467; --scrim:rgba(0,0,0,.55); color-scheme:dark}}
+
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--body);font-size:16px;line-height:1.4;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+  padding-top:env(safe-area-inset-top,0px);padding-bottom:calc(120px + env(safe-area-inset-bottom,0px));
+  -webkit-tap-highlight-color:transparent}
+.wrap{max-width:640px;margin:0 auto}
+header{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;padding-block:28px 8px}
+h1{font-family:var(--display);font-weight:700;font-size:2rem;letter-spacing:-.02em;margin:0;line-height:1}
+.sub{color:var(--muted);font-size:.85rem;margin-top:6px}
+.hright{display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:flex-end}
+.pill{font:inherit;font-size:.85rem;color:var(--muted);background:transparent;border:1px solid var(--line);border-radius:999px;padding:6px 12px;cursor:pointer}
+.pill[aria-pressed="true"]{color:var(--ink);border-color:var(--ink)}
+.me{all:unset;cursor:pointer;width:36px;height:36px;border-radius:50%;display:grid;place-items:center;font-family:var(--display);font-weight:700;color:#fff;background:var(--muted)}
+button:focus-visible,input:focus-visible,.me:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+
+.month{margin-top:28px}
+.month h2{font-family:var(--display);font-weight:700;font-size:1.25rem;margin:0 0 8px;display:inline-block;
+  background:linear-gradient(transparent 58%,var(--mark) 58%,var(--mark) 92%,transparent 92%);padding:0 4px;margin-left:-4px}
+.month h2 small{font-weight:500;color:var(--muted);font-size:.8em;margin-left:6px}
+.sheetwrap{background:var(--surface);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+
+.day{display:grid;grid-template-columns:4.6rem 1fr;border-top:1px solid var(--line)}
+.day:first-child{border-top:0}
+.day.past{opacity:.55}
+.dcell{all:unset;cursor:pointer;padding:12px 8px 12px 12px;border-right:1px solid var(--line);display:flex;flex-direction:column;gap:2px}
+.dcell .wd{font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.dcell .dn{font-family:var(--display);font-weight:700;font-size:1.5rem;line-height:1;font-variant-numeric:tabular-nums}
+.dcell .rng{font-size:.8rem;color:var(--muted);font-variant-numeric:tabular-nums}
+.dcell .today{font-size:.7rem;font-weight:700;color:var(--mark-ink);background:var(--mark);border-radius:4px;padding:1px 5px;align-self:flex-start;margin-top:4px}
+.rows{min-width:0}
+.row{display:grid;grid-template-columns:28px 5.4rem 1fr 24px;align-items:start;gap:4px 8px;padding:10px 12px 10px 8px;border-top:1px solid var(--line);cursor:pointer}
+.row:first-child{border-top:0}
+@media (hover:hover){.row:hover{background:color-mix(in srgb,var(--mark) 10%,transparent)}}
+.tick{all:unset;width:20px;height:20px;border:1.5px solid var(--muted);border-radius:50%;margin-top:1px;cursor:pointer;display:grid;place-items:center}
+.tick:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+.row.done .tick{background:var(--done);border-color:var(--done)}
+.row.done .tick::after{content:"";width:8px;height:4px;border-left:2px solid var(--surface);border-bottom:2px solid var(--surface);transform:rotate(-45deg) translate(1px,-1px)}
+.time{color:var(--muted);font-variant-numeric:tabular-nums;font-size:.92rem;padding-top:1px;white-space:nowrap}
+.what{min-width:0;overflow-wrap:anywhere}
+.what .n{display:block;font-size:.85rem;font-weight:700;color:var(--muted);margin-top:2px}
+.row.done .what .t{text-decoration:line-through;color:var(--done)}
+.who{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;font-family:var(--display);font-weight:700;font-size:.75rem;line-height:1;color:#fff;margin-top:-1px}
+.who:empty{visibility:hidden}
+
+.empty{background:var(--surface);border:1px dashed var(--line);border-radius:10px;padding:28px 20px;margin-top:28px;color:var(--muted)}
+.empty b{color:var(--ink);display:block;font-family:var(--display);font-size:1.15rem;margin-bottom:4px}
+.empty .btn{margin-top:14px}
+
+.fab{position:fixed;right:calc(16px + env(safe-area-inset-right,0px));bottom:calc(20px + env(safe-area-inset-bottom,0px));
+  font:inherit;font-weight:700;font-size:1rem;background:var(--ink);color:var(--bg);border:0;border-radius:999px;padding:14px 22px;cursor:pointer;box-shadow:0 6px 20px rgba(0,0,0,.18)}
+
+/* full-screen states: loading, login, not a member */
+.gate{min-height:calc(100dvh - 160px);display:flex;flex-direction:column;justify-content:center;max-width:420px;margin:0 auto;gap:14px;padding-block:40px}
+.gate h1{font-size:2.6rem}
+.gate .lead{color:var(--muted);font-size:1.05rem;margin:0}
+.gate .mock{background:var(--surface);border:1px solid var(--line);border-radius:10px;overflow:hidden;margin-block:8px}
+.gate .mock div{display:grid;grid-template-columns:3.6rem 4.6rem 1fr;gap:8px;padding:9px 12px;border-top:1px solid var(--line);font-size:.92rem}
+.gate .mock div:first-child{border-top:0}
+.gate .mock span:first-child{font-family:var(--display);font-weight:700}
+.gate .mock span:nth-child(2){color:var(--muted);font-variant-numeric:tabular-nums}
+.gbtn{display:flex;align-items:center;justify-content:center;gap:10px;font:inherit;font-weight:700;font-size:1rem;background:var(--ink);color:var(--bg);border:0;border-radius:10px;padding:14px 18px;cursor:pointer}
+.gbtn svg{width:18px;height:18px;background:#fff;border-radius:50%;padding:2px}
+.small{font-size:.85rem;color:var(--muted)}
+.err{color:var(--danger);font-size:.9rem}
+
+.scrim{position:fixed;inset:0;background:var(--scrim);z-index:20}
+.sheet{position:fixed;left:0;right:0;bottom:0;z-index:21;background:var(--surface);border-radius:16px 16px 0 0;
+  padding:18px max(18px,env(safe-area-inset-right,0px)) calc(18px + env(safe-area-inset-bottom,0px)) max(18px,env(safe-area-inset-left,0px));
+  max-height:92dvh;overflow:auto;box-shadow:0 -8px 30px rgba(0,0,0,.15)}
+.sheet .inner{max-width:560px;margin:0 auto;display:flex;flex-direction:column;gap:14px}
+.sheet h3{font-family:var(--display);margin:0;font-size:1.2rem}
+.sheet h4{font-size:.8rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin:8px 0 0;font-weight:700}
+label{display:flex;flex-direction:column;gap:5px;font-size:.8rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+input[type=text],input[type=email],input[type=date],input[type=time]{font:inherit;font-size:1rem;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:11px 12px;text-transform:none;letter-spacing:0;width:100%;min-width:0;min-height:46px}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.check{flex-direction:row;align-items:center;gap:8px;text-transform:none;letter-spacing:0;font-size:.95rem;color:var(--ink)}
+.check input{width:18px;height:18px}
+.by{font-size:.8rem;color:var(--muted)}
+.actions{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.btn{font:inherit;font-weight:700;border-radius:8px;padding:11px 18px;cursor:pointer;border:1px solid var(--line);background:transparent;color:var(--ink)}
+.btn.primary{background:var(--ink);color:var(--bg);border-color:var(--ink);flex:1}
+.btn.del{color:var(--danger);border-color:transparent;padding-inline:6px}
+.btn:disabled{opacity:.5;cursor:default}
+.swatches{display:flex;flex-wrap:wrap;gap:10px}
+.sw{all:unset;cursor:pointer;width:36px;height:36px;border-radius:50%;display:grid;place-items:center;color:#fff;font-family:var(--display);font-weight:700}
+.sw[aria-checked="true"]{box-shadow:0 0 0 3px var(--surface),0 0 0 5px var(--ink)}
+.sw:focus-visible{outline:2px solid var(--ink);outline-offset:4px}
+.members{list-style:none;margin:0;padding:0;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.members li{display:flex;align-items:center;gap:10px;padding:10px 12px;border-top:1px solid var(--line);min-width:0}
+.members li:first-child{border-top:0}
+.members .mail{flex:1;min-width:0;overflow-wrap:anywhere}
+.members .tag{font-size:.75rem;color:var(--muted)}
+.members button{font:inherit;font-size:.85rem;color:var(--danger);background:none;border:0;cursor:pointer;padding:4px}
+.addrow{display:flex;gap:8px}
+.addrow input{flex:1}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(84px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);padding:9px 14px;border-radius:8px;font-size:.9rem;z-index:30;max-width:calc(100% - 32px)}
+@media (max-width:420px){.row{grid-template-columns:24px 4.6rem 1fr 24px;gap:4px 6px}.day{grid-template-columns:4rem 1fr}}
+@media (prefers-reduced-motion:no-preference){.sheet{animation:up .18s ease-out}@keyframes up{from{transform:translateY(24px);opacity:.6}}}
+</style>
+</head>
+<body>
+
+<!-- Loading -->
+<div class="gate" id="vLoading">
+  <h1>Agenda Familiar</h1>
+  <p class="lead">Cargando…</p>
+</div>
+
+<!-- Login -->
+<div class="gate" id="vLogin" hidden>
+  <h1>Agenda Familiar</h1>
+  <p class="lead">Lo que viene para la familia, por mes, día y hora. Todos agregan, todos ven.</p>
+  <div class="mock" aria-hidden="true">
+    <div><span>Sáb 7</span><span>6:00 p.m.</span><span>Cena familiar</span></div>
+    <div><span>Jue 19</span><span></span><span>Convivio</span></div>
+    <div><span>Sáb 28</span><span>5:00 p.m.</span><span>Fotos navideñas</span></div>
+  </div>
+  <button class="gbtn" id="loginBtn" type="button">
+    <svg viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9 3.5l6.7-6.7C35.6 2.5 30.2 0 24 0 14.6 0 6.6 5.4 2.7 13.2l7.8 6.1C12.4 13.6 17.7 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.7c-.6 3-2.3 5.5-4.8 7.2l7.6 5.9c4.4-4.1 7-10.1 7-17.6z"/><path fill="#FBBC05" d="M10.5 28.7c-.5-1.4-.8-3-.8-4.7s.3-3.2.8-4.7l-7.8-6.1C1 16.6 0 20.2 0 24s1 7.4 2.7 10.8l7.8-6.1z"/><path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.6-5.9c-2.1 1.4-4.9 2.3-8.3 2.3-6.3 0-11.6-4.1-13.5-9.8l-7.8 6.1C6.6 42.6 14.6 48 24 48z"/></svg>
+    Entrar con Google
+  </button>
+  <div class="err" id="loginErr" hidden></div>
+  <p class="small">Solo pueden entrar los correos que la administradora haya agregado a la familia.</p>
+</div>
+
+<!-- Signed in, not on the list -->
+<div class="gate" id="vDenied" hidden>
+  <h1>Agenda Familiar</h1>
+  <p class="lead">El correo <b id="deniedMail"></b> todavía no está en la familia.</p>
+  <p class="small">Pídele a la administradora que te agregue desde el menú de la app y vuelve a intentarlo.</p>
+  <div class="actions">
+    <button class="btn primary" id="retryBtn" type="button">Volver a intentar</button>
+    <button class="btn" id="otherBtn" type="button">Usar otra cuenta</button>
+  </div>
+</div>
+
+<!-- Agenda -->
+<div class="wrap" id="vApp" hidden>
+  <header>
+    <div>
+      <h1>Agenda Familiar</h1>
+      <div class="sub" id="sub">Actividades programadas</div>
+    </div>
+    <div class="hright">
+      <button class="pill" id="pastBtn" aria-pressed="false" type="button" hidden>Ver pasadas</button>
+      <button class="me" id="meBtn" type="button" aria-label="Menú">?</button>
+    </div>
+  </header>
+  <main id="list"></main>
+</div>
+<button class="fab" id="fab" type="button" hidden>+ Agregar</button>
+
+<div class="scrim" id="scrim" hidden></div>
+
+<!-- Activity sheet -->
+<div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle" hidden>
+  <form class="inner" id="form" autocomplete="off">
+    <h3 id="sheetTitle">Nueva actividad</h3>
+    <label>Actividad<input type="text" id="f-title" required maxlength="140" placeholder="Ej. Desayuno cumple de la abuela"></label>
+    <div class="two">
+      <label>Fecha<input type="date" id="f-date" required></label>
+      <label>Hora (opcional)<input type="time" id="f-time"></label>
+    </div>
+    <label class="check"><input type="checkbox" id="f-multi"> Dura varios días</label>
+    <label id="endWrap" hidden>Hasta<input type="date" id="f-end"></label>
+    <label>Nota (opcional)<input type="text" id="f-note" maxlength="140" placeholder="Ej. pedir vacaciones el viernes"></label>
+    <div class="by" id="f-by" hidden></div>
+    <div class="actions">
+      <button type="button" class="btn del" id="delBtn" hidden>Eliminar</button>
+      <button type="button" class="btn" id="cancelBtn">Cancelar</button>
+      <button type="submit" class="btn primary" id="saveBtn">Guardar</button>
+    </div>
+  </form>
+</div>
+
+<!-- Menu sheet -->
+<div class="sheet" id="menu" role="dialog" aria-modal="true" aria-labelledby="menuTitle" hidden>
+  <div class="inner">
+    <h3 id="menuTitle">Hola</h3>
+    <div class="small" id="menuMail"></div>
+
+    <h4>Tu color</h4>
+    <div class="swatches" id="swatches" role="radiogroup" aria-label="Tu color"></div>
+
+    <div id="installBox" hidden>
+      <h4>Instalar</h4>
+      <button class="btn" id="installBtn" type="button">Instalar en este teléfono</button>
+      <div class="small" id="iosHint" hidden>En iPhone: toca el botón Compartir de Safari y elige “Agregar a pantalla de inicio”.</div>
+    </div>
+
+    <div id="adminBox" hidden>
+      <h4>Familia</h4>
+      <ul class="members" id="members"></ul>
+      <form class="addrow" id="addForm" autocomplete="off">
+        <input type="email" id="addMail" placeholder="correo@gmail.com" aria-label="Correo a agregar" required>
+        <button class="btn" type="submit">Agregar</button>
+      </form>
+      <div class="small">Solo estos correos pueden entrar a la agenda.</div>
+    </div>
+
+    <div class="actions">
+      <button class="btn" id="logoutBtn" type="button">Cerrar sesión</button>
+      <button class="btn primary" id="menuClose" type="button">Listo</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast" role="status" hidden></div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js";
+import { getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, signOut }
+  from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
+import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, collection, doc, getDoc, setDoc, updateDoc,
+  deleteDoc, onSnapshot, writeBatch } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
+
+// ---- Configuración ----
+const firebaseConfig = {
+  apiKey: "AIzaSyDkTziSY8jWRrgWO-575-xOjEHETN-CcZ0",
+  authDomain: "agenda-familiar-ec90d.firebaseapp.com",
+  projectId: "agenda-familiar-ec90d",
+  storageBucket: "agenda-familiar-ec90d.firebasestorage.app",
+  messagingSenderId: "379690511362",
+  appId: "1:379690511362:web:db7aa09873b4fbbf670b1b"
+};
+const ADMIN_EMAIL = "registrosmariojo@gmail.com";
+const INITIAL_MEMBERS = ["clausgarcia2@gmail.com"];
+const COLORS = ["#E5484D","#F76B15","#B8860B","#2B9A66","#12A594","#0090FF","#6E56CF","#D6409F","#5B6474"];
+
+// Actividades que ya estaban en la agenda anterior (se importan una sola vez)
+const SEED = [
+  ["2026-10-24","","Sacar licencia",true],["2026-10-24","","Ir al Salón",true],["2026-10-24","","Estados de cuenta banco",true],
+  ["2026-10-24","","Preparar papelería Visa",true],["2026-10-24","18:00","Misa Papá del Negris",true],
+  ["2026-10-25","07:00","Ir a misa",true],["2026-10-25","08:30","Desayuno Cumple Doña Vicky",true],["2026-10-25","","Cama Simán",true],
+  ["2026-10-26","17:00","Comite oficina",false],["2026-10-28","11:00","Cita Reumatóloga",false],
+  ["2026-10-31","","Ayudar a la Chuli con el Fiambre",false],["2026-10-31","","Halloween. cayala",false],
+  ["2026-11-01","07:00","Ir a misa",false],["2026-11-01","","Ayudar a la Chuli con el Fiambre y torrejas",false],
+  ["2026-11-05","08:00","Cita Visa",false],["2026-11-07","18:00","Cita MM",false],["2026-11-14","08:00","Adornar Navidad",false],
+  ["2026-11-19","","Convivio ABG",false],["2026-11-27","","Cena acción de gracias",false],
+  ["2026-11-28","17:00","Tentativo cita para fotos navideñas",false]
+];
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = initializeFirestore(app, { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) });
+
+// ---- Utilidades ----
+const $ = s => document.querySelector(s);
+const DAYS = ["Domingo","Lunes","Martes","Miércoles","Jueves","Viernes","Sábado"];
+const DSHORT = ["Dom","Lun","Mar","Mié","Jue","Vie","Sáb"];
+const MONTHS = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
+const pad = n => String(n).padStart(2,"0");
+const todayStr = () => { const d = new Date(); return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; };
+const parse = s => { const [y,m,d] = s.split("-").map(Number); return new Date(y, m-1, d); };
+function fmtTime(t){ if(!t) return ""; let [h,m] = t.split(":").map(Number); const ap = h >= 12 ? "p.m." : "a.m."; h = h % 12 || 12; return `${h}:${pad(m)} ${ap}`; }
+function toast(msg){ const t=$("#toast"); t.textContent=msg; t.hidden=false; clearTimeout(toast._t); toast._t=setTimeout(()=>t.hidden=true,2800); }
+function defaultColor(uid){ let h=0; for(const c of uid) h=(h*31+c.charCodeAt(0))>>>0; return COLORS[h % COLORS.length]; }
+const initial = name => ((name||"").trim()[0] || "?").toUpperCase();
+const firstName = name => (name||"").trim().split(/\s+/)[0] || "";
+function show(view){ for(const v of ["vLoading","vLogin","vDenied","vApp"]) $("#"+v).hidden = v !== view; $("#fab").hidden = view !== "vApp"; }
+
+// ---- Estado ----
+let me = null, isAdmin = false, items = [], profiles = {}, members = [], loaded = false, showPast = false;
+let editing = null, delArmed = false, unsubs = [];
+
+// ---- Autenticación ----
+const provider = new GoogleAuthProvider();
+provider.setCustomParameters({ prompt: "select_account" });
+
+$("#loginBtn").addEventListener("click", async () => {
+  $("#loginErr").hidden = true;
+  try { await signInWithPopup(auth, provider); }
+  catch(e){
+    if(e.code === "auth/popup-blocked" || e.code === "auth/operation-not-supported-in-this-environment"){ return signInWithRedirect(auth, provider); }
+    if(e.code === "auth/popup-closed-by-user" || e.code === "auth/cancelled-popup-request") return;
+    $("#loginErr").textContent = e.code === "auth/unauthorized-domain"
+      ? "Este sitio aún no está autorizado en Firebase. Agrega el dominio en Authentication → Configuración → Dominios autorizados."
+      : "No se pudo iniciar sesión. Revisa tu conexión e intenta de nuevo.";
+    $("#loginErr").hidden = false;
+  }
+});
+getRedirectResult(auth).catch(() => {});
+$("#retryBtn").addEventListener("click", () => auth.currentUser && enter(auth.currentUser));
+$("#otherBtn").addEventListener("click", () => signOut(auth));
+$("#logoutBtn").addEventListener("click", () => { closeMenu(); signOut(auth); });
+
+onAuthStateChanged(auth, u => {
+  unsubs.forEach(f => f()); unsubs = []; items = []; profiles = {}; members = []; loaded = false;
+  if(!u){ me = null; show("vLogin"); return; }
+  enter(u);
+});
+
+async function enter(u){
+  show("vLoading");
+  const email = (u.email || "").toLowerCase();
+  me = { uid: u.uid, email, name: u.displayName || email };
+  isAdmin = email === ADMIN_EMAIL;
+  let allowed = isAdmin;
+  if(!allowed){
+    try { allowed = (await getDoc(doc(db, "miembros", email))).exists(); }
+    catch { allowed = false; }
+  }
+  if(!allowed){ $("#deniedMail").textContent = email; show("vDenied"); return; }
+
+  // perfil propio (nombre y color)
+  try {
+    const pref = doc(db, "perfiles", u.uid);
+    const snap = await getDoc(pref);
+    const color = snap.exists() && snap.data().color ? snap.data().color : defaultColor(u.uid);
+    if(!snap.exists() || snap.data().name !== me.name || snap.data().email !== email){
+      await setDoc(pref, { name: me.name, email, color });
+    }
+  } catch {}
+
+  show("vApp"); render();
+  unsubs.push(onSnapshot(collection(db, "actividades"), s => {
+    items = s.docs.map(d => ({ id: d.id, ...d.data() })); loaded = true; render();
+  }, () => toast("Se perdió la conexión con la agenda. Cierra y vuelve a abrir la app.")));
+  unsubs.push(onSnapshot(collection(db, "perfiles"), s => {
+    profiles = {}; s.docs.forEach(d => profiles[d.id] = d.data()); render(); paintMe();
+  }, () => {}));
+  if(isAdmin){
+    unsubs.push(onSnapshot(collection(db, "miembros"), s => {
+      members = s.docs.map(d => d.id).sort(); renderMembers();
+    }, () => {}));
+  }
+}
+
+// ---- Agenda ----
+function render(){
+  if($("#vApp").hidden) return;
+  const list = $("#list"); list.replaceChildren();
+  const today = todayStr();
+  const valid = items.filter(i => i.date && i.title);
+  const isPast = i => (i.endDate || i.date) < today;
+  const pastCount = valid.filter(isPast).length;
+  const pb = $("#pastBtn");
+  pb.hidden = pastCount === 0;
+  pb.textContent = showPast ? "Ocultar pasadas" : `Ver pasadas (${pastCount})`;
+  pb.setAttribute("aria-pressed", String(showPast));
+  const shown = valid.filter(i => showPast || !isPast(i));
+  const upcoming = valid.length - pastCount;
+  $("#sub").textContent = loaded ? (upcoming === 1 ? "1 actividad por venir" : `${upcoming} actividades por venir`) : "Cargando…";
+  if(!loaded){ list.innerHTML = '<div class="empty"><b>Cargando la agenda…</b>Aquí aparecerán las actividades por mes y día.</div>'; return; }
+
+  if(!valid.length && isAdmin && !members.length){
+    const e = document.createElement("div"); e.className = "empty";
+    e.innerHTML = "<b>Agenda nueva</b>Puedes traer las actividades que tenías en la agenda anterior y agregar a la familia en un solo paso.";
+    const b = document.createElement("button"); b.className = "btn primary"; b.type = "button"; b.textContent = "Traer mis actividades";
+    b.addEventListener("click", () => importSeed(b));
+    e.append(document.createElement("br"), b); list.append(e); return;
+  }
+  if(!shown.length){
+    const e = document.createElement("div"); e.className = "empty";
+    e.innerHTML = "<b>Nada programado por ahora</b>Toca “+ Agregar” para anotar una actividad. Toda la familia la verá al instante.";
+    list.append(e); return;
+  }
+
+  const groups = new Map();
+  for(const i of shown){ const k = i.date + "|" + (i.endDate || ""); if(!groups.has(k)) groups.set(k, []); groups.get(k).push(i); }
+  const keys = [...groups.keys()].sort();
+  const curYear = new Date().getFullYear();
+  let monthKey = null, box = null;
+
+  for(const k of keys){
+    const [ds, de] = k.split("|");
+    const d = parse(ds);
+    const mk = ds.slice(0,7);
+    if(mk !== monthKey){
+      monthKey = mk;
+      const sec = document.createElement("section"); sec.className = "month";
+      const h = document.createElement("h2"); h.textContent = MONTHS[d.getMonth()];
+      if(d.getFullYear() !== curYear){ const sm = document.createElement("small"); sm.textContent = d.getFullYear(); h.append(sm); }
+      box = document.createElement("div"); box.className = "sheetwrap";
+      sec.append(h, box); list.append(sec);
+    }
+    const day = document.createElement("div"); day.className = "day" + (((de||ds) < today) ? " past" : "");
+    const cell = document.createElement("button"); cell.className = "dcell"; cell.type = "button";
+    cell.setAttribute("aria-label", `Agregar actividad el ${DAYS[d.getDay()]} ${d.getDate()}`);
+    const add = (cls, txt) => { const s = document.createElement("span"); s.className = cls; s.textContent = txt; cell.append(s); };
+    if(de){
+      const e = parse(de);
+      add("wd", `${DSHORT[d.getDay()]} – ${DSHORT[e.getDay()]}`); add("dn", d.getDate());
+      add("rng", `al ${e.getDate()}${e.getMonth()!==d.getMonth() ? " "+MONTHS[e.getMonth()].slice(0,3).toLowerCase() : ""}`);
+      if(ds <= today && today <= de) add("today", "Hoy");
+    } else {
+      add("wd", DAYS[d.getDay()]); add("dn", d.getDate());
+      if(ds === today) add("today", "Hoy");
+    }
+    cell.addEventListener("click", () => openSheet(null, ds, de));
+    const rows = document.createElement("div"); rows.className = "rows";
+    const evs = groups.get(k).sort((a,b) => {
+      if(!!a.time !== !!b.time) return a.time ? -1 : 1;
+      if(a.time !== b.time) return a.time < b.time ? -1 : 1;
+      return (a.createdAt||0) - (b.createdAt||0);
+    });
+    for(const ev of evs){
+      const r = document.createElement("div"); r.className = "row" + (ev.done ? " done" : "");
+      r.tabIndex = 0; r.setAttribute("role","button");
+      const tk = document.createElement("button"); tk.type = "button"; tk.className = "tick";
+      tk.setAttribute("aria-label", ev.done ? "Marcar como pendiente" : "Marcar como hecho");
+      tk.addEventListener("click", e => { e.stopPropagation(); toggleDone(ev); });
+      const tm = document.createElement("span"); tm.className = "time"; tm.textContent = fmtTime(ev.time);
+      const w = document.createElement("div"); w.className = "what";
+      const t = document.createElement("span"); t.className = "t"; t.textContent = ev.title; w.append(t);
+      if(ev.note){ const n = document.createElement("span"); n.className = "n"; n.textContent = ev.note; w.append(n); }
+      const who = document.createElement("span"); who.className = "who";
+      const p = ev.by && profiles[ev.by];
+      if(p){ who.textContent = initial(p.name); who.style.background = p.color || defaultColor(ev.by);
+        who.title = "Agregado por " + (firstName(p.name) || "alguien"); who.setAttribute("aria-label", who.title); }
+      r.append(tk, tm, w, who);
+      r.addEventListener("click", () => openSheet(ev));
+      r.addEventListener("keydown", e => { if((e.key==="Enter"||e.key===" ") && e.target===r){ e.preventDefault(); openSheet(ev); } });
+      rows.append(r);
+    }
+    day.append(cell, rows); box.append(day);
+  }
+}
+
+async function toggleDone(ev){
+  try { await updateDoc(doc(db, "actividades", ev.id), { done: !ev.done, updatedAt: Date.now() }); }
+  catch { toast("No se pudo guardar. Revisa tu conexión."); }
+}
+
+async function importSeed(btn){
+  btn.disabled = true; btn.textContent = "Importando…";
+  try {
+    const batch = writeBatch(db);
+    SEED.forEach(([date, time, title, done], i) => {
+      batch.set(doc(collection(db, "actividades")), { title, date, endDate: null, time, note: "", done, by: me.uid, createdAt: i + 1, updatedAt: Date.now() });
+    });
+    INITIAL_MEMBERS.forEach(m => batch.set(doc(db, "miembros", m), { addedAt: Date.now() }));
+    await batch.commit();
+    toast("Listo: actividades y familia agregadas");
+  } catch { btn.disabled = false; btn.textContent = "Traer mis actividades"; toast("No se pudo importar. Intenta de nuevo."); }
+}
+
+// ---- Hoja de actividad ----
+function openSheet(ev, date, end){
+  editing = ev || null; delArmed = false;
+  $("#sheetTitle").textContent = ev ? "Editar actividad" : "Nueva actividad";
+  $("#f-title").value = ev?.title || "";
+  $("#f-date").value = ev?.date || date || todayStr();
+  $("#f-time").value = ev?.time || "";
+  const multi = !!(ev?.endDate || end);
+  $("#f-multi").checked = multi; $("#endWrap").hidden = !multi;
+  $("#f-end").value = ev?.endDate || end || "";
+  $("#f-note").value = ev?.note || "";
+  const del = $("#delBtn"); del.hidden = !ev; del.textContent = "Eliminar";
+  const p = ev?.by && profiles[ev.by];
+  $("#f-by").textContent = p ? "Agregado por " + (p.name || "alguien") : "";
+  $("#f-by").hidden = !p;
+  $("#scrim").hidden = false; $("#sheet").hidden = false;
+  if(!ev) setTimeout(() => $("#f-title").focus(), 60);
+}
+function closeSheet(){ $("#sheet").hidden = true; if($("#menu").hidden) $("#scrim").hidden = true; editing = null; }
+
+$("#f-multi").addEventListener("change", e => { $("#endWrap").hidden = !e.target.checked; if(e.target.checked && !$("#f-end").value) $("#f-end").value = $("#f-date").value; });
+$("#cancelBtn").addEventListener("click", closeSheet);
+$("#scrim").addEventListener("click", () => { closeSheet(); closeMenu(); });
+document.addEventListener("keydown", e => { if(e.key === "Escape"){ closeSheet(); closeMenu(); } });
+$("#fab").addEventListener("click", () => openSheet(null));
+$("#pastBtn").addEventListener("click", () => { showPast = !showPast; render(); });
+
+$("#delBtn").addEventListener("click", async () => {
+  if(!editing) return;
+  if(!delArmed){ delArmed = true; $("#delBtn").textContent = "Toca otra vez para eliminar"; return; }
+  const id = editing.id; closeSheet();
+  try { await deleteDoc(doc(db, "actividades", id)); toast("Actividad eliminada"); }
+  catch { toast("No se pudo eliminar. Revisa tu conexión."); }
+});
+
+$("#form").addEventListener("submit", e => {
+  e.preventDefault();
+  const title = $("#f-title").value.trim(), date = $("#f-date").value;
+  if(!title || !date){ toast("Escribe la actividad y la fecha."); return; }
+  let endDate = $("#f-multi").checked ? $("#f-end").value : "";
+  if(endDate && endDate <= date) endDate = "";
+  const body = {
+    title, date, endDate: endDate || null,
+    time: $("#f-time").value || "",
+    note: $("#f-note").value.trim(),
+    done: editing?.done || false,
+    by: editing?.by || me.uid,
+    createdAt: editing?.createdAt || Date.now(),
+    updatedAt: Date.now()
+  };
+  const ref = editing ? doc(db, "actividades", editing.id) : doc(collection(db, "actividades"));
+  const wasNew = !editing;
+  closeSheet();
+  // con caché local el cambio aparece al instante y se sincroniza al haber señal
+  setDoc(ref, body).catch(() => toast("No se pudo guardar. Revisa tu conexión."));
+  toast(wasNew ? "Actividad agregada" : "Cambios guardados");
+});
+
+// ---- Menú ----
+function paintMe(){
+  if(!me) return;
+  const p = profiles[me.uid];
+  const color = p?.color || defaultColor(me.uid);
+  const b = $("#meBtn"); b.textContent = initial(me.name); b.style.background = color;
+  b.setAttribute("aria-label", "Menú de " + (firstName(me.name) || "usuario"));
+  const sw = $("#swatches"); sw.replaceChildren();
+  for(const c of COLORS){
+    const s = document.createElement("button"); s.type = "button"; s.className = "sw"; s.style.background = c;
+    s.setAttribute("role","radio"); s.setAttribute("aria-checked", String(c === color)); s.setAttribute("aria-label", "Color " + c);
+    if(c === color) s.textContent = initial(me.name);
+    s.addEventListener("click", async () => {
+      if(c === color) return;
+      try { await updateDoc(doc(db, "perfiles", me.uid), { color: c }); } catch { toast("No se pudo cambiar el color."); }
+    });
+    sw.append(s);
+  }
+}
+function renderMembers(){
+  const ul = $("#members"); ul.replaceChildren();
+  const li0 = document.createElement("li");
+  const m0 = document.createElement("span"); m0.className = "mail"; m0.textContent = ADMIN_EMAIL;
+  const t0 = document.createElement("span"); t0.className = "tag"; t0.textContent = "Administradora";
+  li0.append(m0, t0); ul.append(li0);
+  for(const m of members){
+    if(m === ADMIN_EMAIL) continue;
+    const li = document.createElement("li");
+    const s = document.createElement("span"); s.className = "mail"; s.textContent = m;
+    const b = document.createElement("button"); b.type = "button"; b.textContent = "Quitar";
+    b.addEventListener("click", async () => {
+      if(b.dataset.armed !== "1"){ b.dataset.armed = "1"; b.textContent = "¿Seguro? Toca otra vez"; return; }
+      try { await deleteDoc(doc(db, "miembros", m)); toast("Quitado de la familia"); } catch { toast("No se pudo quitar."); }
+    });
+    li.append(s, b); ul.append(li);
+  }
+}
+$("#addForm").addEventListener("submit", async e => {
+  e.preventDefault();
+  const m = $("#addMail").value.trim().toLowerCase();
+  if(!/^[^\s@/]+@[^\s@/]+\.[^\s@/]+$/.test(m)){ toast("Escribe un correo válido."); return; }
+  try { await setDoc(doc(db, "miembros", m), { addedAt: Date.now() }); $("#addMail").value = ""; toast("Agregado: " + m); }
+  catch { toast("No se pudo agregar. Revisa tu conexión."); }
+});
+function openMenu(){
+  $("#menuTitle").textContent = "Hola, " + (firstName(me?.name) || "");
+  $("#menuMail").textContent = me?.email || "";
+  $("#adminBox").hidden = !isAdmin;
+  paintMe(); if(isAdmin) renderMembers();
+  updateInstall();
+  $("#scrim").hidden = false; $("#menu").hidden = false;
+}
+function closeMenu(){ $("#menu").hidden = true; if($("#sheet").hidden) $("#scrim").hidden = true; }
+$("#meBtn").addEventListener("click", openMenu);
+$("#menuClose").addEventListener("click", closeMenu);
+
+// ---- Instalación ----
+let installEvt = null;
+const standalone = () => matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+addEventListener("beforeinstallprompt", e => { e.preventDefault(); installEvt = e; updateInstall(); });
+addEventListener("appinstalled", () => { installEvt = null; updateInstall(); toast("App instalada"); });
+function updateInstall(){
+  const showBox = !standalone() && (installEvt || isIOS);
+  $("#installBox").hidden = !showBox;
+  $("#installBtn").hidden = !installEvt;
+  $("#iosHint").hidden = !(isIOS && !installEvt);
+}
+$("#installBtn").addEventListener("click", async () => { if(!installEvt) return; installEvt.prompt(); await installEvt.userChoice.catch(()=>{}); installEvt = null; updateInstall(); });
+
+if("serviceWorker" in navigator){ addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {})); }
+setInterval(render, 10 * 60 * 1000);
+document.addEventListener("visibilitychange", () => { if(!document.hidden) render(); });
+</script>
+</body>
+</html>
